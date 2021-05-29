@@ -5,7 +5,7 @@
 
 ## Overview
 
-This repo is providing playbooks for upgrading `cdp-telemetry` and `cdp-logging-agent` binaries by ansible (for providing only `salt-master` host).
+This repo is providing playbooks for upgrading `cdp-telemetry` and `cdp-logging-agent` binaries by ansible (for providing only `salt-master` host - ssh is only needed onto that node).
 
 ## Requirements:
 
@@ -30,5 +30,31 @@ docker-compose run ansible-cb-telemetry-manager ansible -i hosts.sample salt-mas
 
 - Note 1.: the examples does not contain the docker or docker-compose prefixes. 
 - Note 2: `.env` file can be defined in the project folder, there you can set `SSH_KEYS_LOCATION`, which will be passed as a volume folder with the docker-compose
+```
+
+You can also download the source from https://github.com/oleewere/ansible-cb-telemetry-manager/archive/refs/tags/v0.0.1.tar.gz or https://github.com/oleewere/ansible-cb-telemetry-manager/archive/refs/tags/v0.0.1.zip
 
 ## Setup
+
+Create a valid `hosts` file, you can use the `hosts.sample` for reference. It is required to fill the `temp_dir` value and providing at least 1 address in the `salt-master` group. (and of course provide valid ssh details in your config)
+
+## Testing
+
+To make sure communication with salt and running local scripts can work, you can use for testing.
+
+```
+ansible playbook -i hosts playbooks/test-salt.yaml
+ansible playbook -i hosts playbooks/test-script.yaml
+```
+
+## Upgrading cdp-telemetry
+
+```
+ansible-playbook -i hosts playbooks/upgrade-cdp-telemetry.yaml
+```
+
+## Upgrading cdp-logging-agent
+
+```
+ansible-playbook -i hosts playbooks/upgrade-cdp-logging-agent.yaml
+```
