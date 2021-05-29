@@ -1,0 +1,67 @@
+---
+- hosts: 127.0.0.1
+  connection: local
+  tasks:
+  - name: Creates tmp directory
+    file:
+      path: "{{ temp_dir }}"
+      state: directory
+  - name: "Download cdp-logging-agent versions file https://cloudera-service-delivery-cache.s3.amazonaws.com/telemetry/cdp-logging-agent/AVAILABLE_VERSIONS into {{ temp_dir }}/"
+    get_url:
+      url: https://cloudera-service-delivery-cache.s3.amazonaws.com/telemetry/cdp-logging-agent/AVAILABLE_VERSIONS
+      dest: "{{ temp_dir }}/"
+      mode: '0777'
+  - name: Read last available version
+    shell: cat {{ temp_dir }}/AVAILABLE_VERSIONS | head -1
+    register: last_available_version
+  - name: "Download cloudbreak-images Makefile (to get role version)"
+    get_url:
+      url: https://raw.githubusercontent.com/hortonworks/cloudbreak-images/master/Makefile
+      dest: "{{ temp_dir }}/"
+      mode: '0777'
+  - name: "Get latest grains role"
+    shell: "cat {{ temp_dir }}/Makefile | grep fluent_prewarmed | tr -d '\"' | awk '{print $3}'"
+    register: fluent_role
+  - name: "Creates role file with {{ fluent_role.stdout_lines[0] }}"
+    copy:
+      content: "{{ fluent_role.stdout_lines[0] }}"
+      dest: "{{ temp_dir }}/new_logging_grain_role"
+      mode: '0777'
+  - name: "Download cloudbreak-images Makefile (to get role version)"
+    get_url:
+      url: https://raw.githubusercontent.com/hortonworks/cloudbreak-images/master/Makefile
+      dest: "{{ temp_dir }}/"
+      mode: '0777'
+  - name: "Download last latest rpm: https://cloudera-service-delivery-cache.s3.amazonaws.com/telemetry/cdp-logging-agent/{{ last_available_version.stdout_lines[0] }}/cdp_logging_agent-{{ last_available_version.stdout_lines[0] }}.x86_64.rpm into {{ temp_dir }}/" 
+    get_url:
+      url: "https://cloudera-service-delivery-cache.s3.amazonaws.com/telemetry/cdp-logging-agent/{{ last_available_version.stdout_lines[0] }}/cdp_logging_agent-{{ last_available_version.stdout_lines[0] }}.x86_64.rpm"
+      dest: "{{ temp_dir }}/"
+      mode: '0777'
+  - name: Delete version file
+    file:
+      path: "{{ temp_dir }}/AVAILABLE_VERSIONS"
+      state: absent
+  - name: Delete Makefile
+    file:
+      path: "{{ temp_dir }}/Makefile"
+      state: absent
+- hosts: salt-master
+  become: true
+  tasks:
+  - name: "Copy rpm file from {{ temp_dir }}/cdp_logging_agent-*.x86_64.rpm to remote: /home/cloudbreak/" 
+    copy:
+      src: "{{ item }}"
+      dest: "/home/cloudbreak/"
+      owner: root
+      group: root
+      mode: 0777
+    with_fileglob: "{{ temp_dir }}/cdp_logging_agent-*.x86_64.rpm"
+  - name: "Run update-cdp-logging-agent.sh on salt master"
+    ansible.builtin.script: ../scripts/update-cdp-logging-agent.sh
+- hosts: 127.0.0.1
+  connection: local
+  tasks:
+  - name: Delete local cdp_logging_agent rpm
+    shell: "rm -r {{ temp_dir }}/cdp_logging_agent*.rpm"
+  - name: Delete local new grain_role file
+    shell: "rm -r {{ temp_dir }}/new_logging_grain_role"

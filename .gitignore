@@ -22,3 +22,4 @@ hosts.*
 !hosts.sample
 out/
 .env
+tmp

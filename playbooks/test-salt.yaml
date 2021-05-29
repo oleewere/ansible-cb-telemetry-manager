@@ -1,0 +1,6 @@
+---
+- hosts: salt-master
+  become: true
+  tasks:
+  - name: "Test salt communication"
+    shell: "/opt/salt_*/bin/salt '*' cmd.run 'echo hello'"

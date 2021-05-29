@@ -1,0 +1,69 @@
+---
+- hosts: 127.0.0.1
+  connection: local
+  tasks:
+  - name: Creates tmp directory
+    file:
+      path: "{{ temp_dir }}"
+      state: directory
+  - name: "Download cdp-telemetry versions file https://cloudera-service-delivery-cache.s3.amazonaws.com/telemetry/cdp-telemetry/AVAILABLE_VERSIONS into {{ temp_dir }}/"
+    get_url:
+      url: https://cloudera-service-delivery-cache.s3.amazonaws.com/telemetry/cdp-telemetry/AVAILABLE_VERSIONS
+      dest: "{{ temp_dir }}/"
+      mode: '0777'
+  - name: Read last available version
+    shell: cat {{ temp_dir }}/AVAILABLE_VERSIONS | head -1
+    register: last_available_version
+  - name: "Download cloudbreak-images Makefile (to get role version)"
+    get_url:
+      url: https://raw.githubusercontent.com/hortonworks/cloudbreak-images/master/Makefile
+      dest: "{{ temp_dir }}/"
+      mode: '0777'
+  - name: "Get latest grains role"
+    shell: "cat {{ temp_dir }}/Makefile | grep cdp_telemetry_prewarmed | tr -d '\"' | awk '{print $3}'"
+    register: cdp_telemetry_role
+  - name: "Creates role file with {{ cdp_telemetry_role.stdout_lines[0] }}"
+    copy:
+      content: "{{ cdp_telemetry_role.stdout_lines[0] }}"
+      dest: "{{ temp_dir }}/new_telemetry_grain_role"
+      mode: '0777'
+  - name: "Download last latest rpm: https://cloudera-service-delivery-cache.s3.amazonaws.com/telemetry/cdp-telemetry/cdp_telemetry-{{ last_available_version.stdout_lines[0] }}.x86_64.rpm into {{ temp_dir }}/" 
+    get_url:
+      url: "https://cloudera-service-delivery-cache.s3.amazonaws.com/telemetry/cdp-telemetry/cdp_telemetry-{{ last_available_version.stdout_lines[0] }}.x86_64.rpm"
+      dest: "{{ temp_dir }}/"
+      mode: '0777'
+  - name: Delete version file
+    file:
+      path: "{{ temp_dir }}/AVAILABLE_VERSIONS"
+      state: absent
+  - name: Delete Makefile
+    file:
+      path: "{{ temp_dir }}/Makefile"
+      state: absent
+- hosts: salt-master
+  become: true
+  tasks:
+  - name: "Copy rpm file from {{ temp_dir }}/cdp_telemetry-*.x86_64.rpm to remote: /home/cloudbreak/" 
+    copy:
+      src: "{{ item }}"
+      dest: "/home/cloudbreak/"
+      owner: root
+      group: root
+      mode: 0777
+    with_fileglob: "{{ temp_dir }}/cdp_telemetry-*.x86_64.rpm"
+  - name: "Copy rpm file from {{ temp_dir }}/new_telemetry_grain_role to remote /home/cloudbreak/" 
+    copy:
+      src: "{{ temp_dir }}/new_telemetry_grain_role"
+      dest: "/home/cloudbreak/"
+      owner: root
+      group: root
+      mode: 0777
+  - name: "Run update-cdp-telemetry.sh on salt master"
+    ansible.builtin.script: ../scripts/update-cdp-telemetry.sh
+- hosts: 127.0.0.1
+  connection: local
+  tasks:
+  - name: Delete local cdp_telemetry rpm
+    shell: "rm -r {{ temp_dir }}/cdp_telemetry*.rpm"
+  - name: Delete local new grain_role file
+    shell: "rm -r {{ temp_dir }}/new_telemetry_grain_role"
