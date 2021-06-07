@@ -1,0 +1,6 @@
+---
+- hosts: salt-master
+  become: true
+  tasks:
+  - name: Run install proxy script
+    ansible.builtin.script: ../scripts/install-proxy.sh
